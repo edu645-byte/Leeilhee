@@ -1,0 +1,16 @@
+# 환경 변수 및 비밀 키 파일 (GitHub 업로드 절대 금지)
+.env
+.env.local
+.env.*.local
+
+# Node.js 패키지 및 빌드 결과물
+node_modules/
+dist/
+build/
+
+# Vercel 배포 캐시
+.vercel
+
+# 운영체제 생성 파일
+.DS_Store
+Thumbs.db

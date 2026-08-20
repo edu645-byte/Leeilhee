@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오늘의 하루는 어땠나요? - AI 감정 일기</title>
+
+    <!-- 구글 폰트 (Pretendard 스타일의 깔끔하고 둥근 폰트 적용) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK (v9 호환 모드 CDN 로드) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+    <!-- CSS 스타일 정의 (파스텔톤의 따뜻하고 포근한 테마) -->
+    <style>
+        /* ==========================================================================
+           1. 기본 스타일 및 파스텔톤 컬러 변수 설정
+           ========================================================================== */
+        :root {
+            --bg-gradient-start: #fbf8f5;  /* 부드러운 크림 아이보리 */
+            --bg-gradient-end: #f3e8ee;    /* 은은한 파스텔 라벤더 핑크 */
+            --card-bg: rgba(255, 255, 255, 0.88); /* 반투명 화이트 카드 */
+            --primary-color: #f7a8b8;      /* 따뜻한 파스텔 핑크/피치 */
+            --secondary-color: #a0c4ff;    /* 부드러운 파스텔 블루 */
+            --save-color: #88d49e;         /* 저장 성공/파스텔 민트그린 */
+            --save-hover: #72c68a;
+            --reset-color: #e0e0e0;        /* 초기화 파스텔 그레이 */
+            --text-main: #4a4453;          /* 차분한 다크 그레이 텍스트 */
+            --text-sub: #7d7589;           /* 은은한 서브 텍스트 */
+            --border-color: #eadde6;       /* 부드러운 테두리 색상 */
+            --ai-box-bg: #f8f6fb;          /* AI 답변 박스 기본 배경색 */
+            --shadow-soft: 0 10px 30px rgba(180, 160, 190, 0.15);
+            --shadow-hover: 0 14px 35px rgba(180, 160, 190, 0.25);
+        }
+
+        /* 전체 요소 기본 여백 초기화 및 박스 사이징 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        /* 화면 전체 배경 및 레이아웃 */
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--bg-gradient-start) 0%, #f7edf2 50%, var(--bg-gradient-end) 100%);
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 32px 16px;
+        }
+
+        /* ==========================================================================
+           2. 메인 컨테이너 (다이어리 카드)
+           ========================================================================== */
+        .container {
+            width: 100%;
+            max-width: 680px;
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 28px;
+            padding: 36px 32px;
+            box-shadow: var(--shadow-soft);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            transition: all 0.3s ease;
+            margin-bottom: 40px;
+        }
+
+        /* ==========================================================================
+           3. 헤더 (타이틀 및 부제목)
+           ========================================================================== */
+        .header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+
+        .header-icon {
+            font-size: 2.2rem;
+            display: inline-block;
+            margin-bottom: 8px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-6px); }
+        }
+
+        .header h1 {
+            font-size: 1.85rem;
+            font-weight: 700;
+            color: #3b3547;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            font-size: 0.95rem;
+            color: var(--text-sub);
+            font-weight: 400;
+        }
+
+        /* ==========================================================================
+           4. 일기 입력 영역 (textarea)
+           ========================================================================== */
+        .input-section {
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .diary-textarea {
+            width: 100%;
+            height: 170px;
+            padding: 18px 20px;
+            border-radius: 18px;
+            border: 1.5px solid var(--border-color);
+            background-color: #ffffff;
+            color: var(--text-main);
+            font-size: 1.05rem;
+            line-height: 1.65;
+            resize: vertical;
+            min-height: 130px;
+            outline: none;
+            transition: all 0.25s ease;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
+        }
+
+        .diary-textarea:focus {
+            border-color: #caa0e8;
+            box-shadow: 0 0 0 4px rgba(202, 160, 232, 0.2);
+        }
+
+        .diary-textarea::placeholder {
+            color: #b3a9c0;
+            font-weight: 400;
+            font-size: 0.95rem;
+            line-height: 1.6;
+        }
+
+        .textarea-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            padding: 0 6px;
+            font-size: 0.85rem;
+            color: var(--text-sub);
+        }
+
+        .voice-status {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            color: #e05d74;
+            font-weight: 600;
+        }
+
+        .voice-status.active {
+            display: inline-flex;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #ff5277;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse-ring 1.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.9); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.4; }
+            100% { transform: scale(0.9); opacity: 1; }
+        }
+
+        /* ==========================================================================
+           5. 버튼 그룹 영역
+           ========================================================================== */
+        /* 메인 액션 버튼 (음성 입력 & 분석 요청) */
+        .main-button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        /* 보조 관리 버튼 (새로 만들기 & 저장하기) */
+        .sub-button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 26px;
+        }
+
+        /* 버튼 기본 공통 스타일 */
+        .btn {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            padding: 13px 18px;
+            border-radius: 16px;
+            font-size: 0.98rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            user-select: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        /* 1) 음성으로 입력하기 버튼 */
+        .btn-voice {
+            background-color: #ede7f6;
+            color: #5e4b8b;
+            border: 1px solid #ddd2f0;
+        }
+
+        .btn-voice:hover {
+            background-color: #e3d9f3;
+        }
+
+        .btn-voice.recording {
+            background-color: #ffebee;
+            color: #d32f2f;
+            border-color: #ffcdd2;
+            animation: voice-button-pulse 1.5s infinite;
+        }
+
+        @keyframes voice-button-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239, 83, 80, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 83, 80, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 83, 80, 0); }
+        }
+
+        /* 2) 분석 요청하기 버튼 (Vercel Serverless / Gemini AI) */
+        .btn-analyze {
+            background: linear-gradient(135deg, #fbb1bd 0%, #fca497 100%);
+            color: #ffffff;
+            box-shadow: 0 6px 16px rgba(251, 177, 189, 0.35);
+        }
+
+        .btn-analyze:hover {
+            background: linear-gradient(135deg, #f99ea0 0%, #fa9284 100%);
+            box-shadow: 0 8px 20px rgba(251, 177, 189, 0.45);
+        }
+
+        /* 3) 새로 만들기 버튼 */
+        .btn-reset {
+            background-color: #f1f0f5;
+            color: #635d70;
+            border: 1px solid #e2dfe9;
+        }
+
+        .btn-reset:hover {
+            background-color: #e7e5ee;
+            color: #484255;
+        }
+
+        /* 4) 일기 저장하기 버튼 (파스텔 민트) */
+        .btn-save {
+            background: linear-gradient(135deg, #a1e3b5 0%, #80d39b 100%);
+            color: #275635;
+            box-shadow: 0 6px 16px rgba(136, 212, 158, 0.3);
+        }
+
+        .btn-save:hover {
+            background: linear-gradient(135deg, #91dcab 0%, #6ecb8d 100%);
+            box-shadow: 0 8px 20px rgba(136, 212, 158, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* ==========================================================================
+           6. AI 답변 박스 영역
+           ========================================================================== */
+        .ai-section {
+            border-top: 1px dashed var(--border-color);
+            padding-top: 22px;
+            margin-bottom: 28px;
+        }
+
+        .ai-section-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #4b4458;
+            margin-bottom: 12px;
+        }
+
+        .ai-badge {
+            font-size: 0.75rem;
+            background: linear-gradient(135deg, #e8def8 0%, #dcd0f3 100%);
+            color: #65558f;
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ai-response-box {
+            background-color: var(--ai-box-bg);
+            border-radius: 20px;
+            padding: 24px 22px;
+            min-height: 120px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transition: all 0.35s ease;
+            position: relative;
+        }
+
+        .ai-placeholder-text {
+            color: #9d94a8;
+            font-size: 0.98rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ai-loading {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .spinner {
+            width: 38px;
+            height: 38px;
+            border: 3.5px solid #e2d9f3;
+            border-top-color: #a782ec;
+            border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-size: 0.95rem;
+            color: #7a6e8e;
+            font-weight: 500;
+        }
+
+        .ai-result-content {
+            display: none;
+            width: 100%;
+            text-align: left;
+            animation: fadeInUp 0.45s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(210, 195, 225, 0.4);
+        }
+
+        .emotion-emoji {
+            font-size: 2.2rem;
+            background: #ffffff;
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .emotion-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .emotion-label {
+            font-size: 0.8rem;
+            color: var(--text-sub);
+            font-weight: 500;
+        }
+
+        .emotion-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #3f364e;
+        }
+
+        .ai-message-text {
+            font-size: 1.02rem;
+            line-height: 1.8;
+            color: #494254;
+            white-space: pre-line;
+            background-color: rgba(255, 255, 255, 0.7);
+            padding: 16px 18px;
+            border-radius: 14px;
+            border-left: 4px solid #caa0e8;
+        }
+
+        /* ==========================================================================
+           7. 저장된 일기 목록 히스토리 섹션
+           ========================================================================= */
+        .history-section {
+            border-top: 1px dashed var(--border-color);
+            padding-top: 22px;
+        }
+
+        .history-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .history-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #4b4458;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .diary-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            max-height: 380px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .diary-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .diary-list::-webkit-scrollbar-thumb {
+            background-color: #ddd4e5;
+            border-radius: 10px;
+        }
+
+        .diary-item {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 16px 18px;
+            border: 1px solid #f0e6ed;
+            box-shadow: 0 4px 12px rgba(180, 160, 190, 0.08);
+            transition: all 0.25s ease;
+        }
+
+        .diary-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(180, 160, 190, 0.16);
+            border-color: #dfcfe0;
+        }
+
+        .diary-item-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .diary-item-emotion {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            font-size: 0.92rem;
+            color: #4b4255;
+        }
+
+        .diary-item-date {
+            font-size: 0.78rem;
+            color: #9d94a8;
+        }
+
+        .diary-item-content {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: #554e60;
+            white-space: pre-wrap;
+            margin-bottom: 10px;
+        }
+
+        .diary-item-ai {
+            background-color: #faf7fd;
+            border-radius: 10px;
+            padding: 10px 12px;
+            font-size: 0.88rem;
+            color: #6a5e80;
+            line-height: 1.5;
+            border-left: 3px solid #d5b8ec;
+        }
+
+        .empty-history {
+            text-align: center;
+            padding: 30px 10px;
+            color: #a89fb3;
+            font-size: 0.92rem;
+        }
+
+        /* ==========================================================================
+           8. 토스트 알림 메시지 (하단 팝업)
+           ========================================================================== */
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background-color: #3b3547;
+            color: #ffffff;
+            padding: 12px 24px;
+            border-radius: 30px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toast.show {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
+        }
+
+        /* ==========================================================================
+           9. 모바일 반응형 미디어 쿼리
+           ========================================================================== */
+        @media (max-width: 540px) {
+            .container {
+                padding: 24px 18px;
+                border-radius: 22px;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
+
+            .main-button-group, .sub-button-group {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+
+            .btn {
+                padding: 12px 16px;
+                font-size: 0.93rem;
+            }
+
+            .diary-textarea {
+                height: 140px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 메인 다이어리 컨테이너 -->
+    <main class="container">
+        <!-- 1. 헤더 영역 -->
+        <header class="header">
+            <span class="header-icon" aria-hidden="true">🌱</span>
+            <h1>오늘의 하루는 어땠나요?</h1>
+            <p>당신의 소중한 순간과 감정을 편안하게 털어놓아 보세요.</p>
+        </header>
+
+        <!-- 2. 일기 입력 영역 -->
+        <section class="input-section">
+            <textarea 
+                id="diaryInput" 
+                class="diary-textarea" 
+                placeholder="오늘 어떤 일이 있었나요? 기뻤던 일, 속상했던 일, 무엇이든 자유롭게 적어보세요. (음성으로도 편하게 말할 수 있어요!)"
+                aria-label="일기 입력창"
+            ></textarea>
+            
+            <div class="textarea-footer">
+                <span id="voiceStatus" class="voice-status">
+                    <span class="pulse-dot"></span> 음성을 듣고 있어요... 편하게 말씀해 주세요!
+                </span>
+                <span id="charCount">0자</span>
+            </div>
+        </section>
+
+        <!-- 3. 메인 버튼 영역 (음성 입력 & 분석 요청) -->
+        <section class="main-button-group">
+            <button id="voiceBtn" class="btn btn-voice" type="button" title="마이크로 음성 입력 시작">
+                <span class="icon">🎙️</span>
+                <span id="voiceBtnText">음성으로 입력하기</span>
+            </button>
+
+            <button id="analyzeBtn" class="btn btn-analyze" type="button" title="Google Gemini AI 감정 분석 요청">
+                <span class="icon">✨</span>
+                <span>분석 요청하기</span>
+            </button>
+        </section>
+
+        <!-- 4. 보조 관리 버튼 영역 (새로 만들기 & 저장하기) -->
+        <section class="sub-button-group">
+            <button id="resetBtn" class="btn btn-reset" type="button" title="입력창 및 분석 결과 초기화">
+                <span class="icon">🔄</span>
+                <span>새로 만들기</span>
+            </button>
+
+            <button id="saveBtn" class="btn btn-save" type="button" title="Firebase 데이터베이스에 저장">
+                <span class="icon">💾</span>
+                <span id="saveBtnText">일기 저장하기</span>
+            </button>
+        </section>
+
+        <!-- 5. AI 답변 박스 영역 -->
+        <section class="ai-section">
+            <h2 class="ai-section-title">
+                <span>🤖 AI의 답변</span>
+                <span class="ai-badge">✨ Google Gemini AI</span>
+            </h2>
+
+            <div id="aiResponseBox" class="ai-response-box">
+                <!-- (1) 기본 초기 상태 문구 -->
+                <div id="aiPlaceholder" class="ai-placeholder-text">
+                    <span>💭</span>
+                    <span>여기에 AI의 답변이 표시됩니다.</span>
+                </div>
+
+                <!-- (2) 분석 중 로딩 표시기 -->
+                <div id="aiLoading" class="ai-loading">
+                    <div class="spinner"></div>
+                    <span id="loadingMessage" class="loading-text">Google Gemini AI가 당신의 이야기를 읽고 마음을 헤아리고 있어요...</span>
+                </div>
+
+                <!-- (3) AI 감정 분석 결과 출력 영역 -->
+                <div id="aiResultContent" class="ai-result-content">
+                    <div class="result-header">
+                        <div id="resultEmoji" class="emotion-emoji">😃</div>
+                        <div class="emotion-info">
+                            <span class="emotion-label">오늘 발견한 마음</span>
+                            <span id="resultEmotionName" class="emotion-name">기쁨과 행복</span>
+                        </div>
+                    </div>
+                    <div id="resultMessage" class="ai-message-text">
+                        따뜻한 응원 문구가 여기에 표시됩니다.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 6. 저장된 일기 목록 히스토리 영역 -->
+        <section class="history-section">
+            <div class="history-header">
+                <h2 class="history-title">
+                    <span>📖 저장된 나의 일기</span>
+                </h2>
+            </div>
+            <!-- 실시간 일기 목록 컨테이너 -->
+            <div id="diaryList" class="diary-list">
+                <div class="empty-history">아직 저장된 일기가 없습니다. 오늘의 이야기를 기록해 보세요! ✨</div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 토스트 알림 메시지 요소 -->
+    <div id="toast" class="toast">알림 메시지</div>
+
+    <!-- ==========================================================================
+       자바스크립트 로직 (Firebase, Vercel Serverless API 연동, Web Speech API)
+       ========================================================================== -->
+    <script>
+        // ==========================================================================
+        // 1. Firebase 설정 및 초기화
+        // ==========================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyDwMK1gnuIljZ9lJLZ-B84mNFLtGE0wOyw",
+            authDomain: "diary-9edec.firebaseapp.com",
+            projectId: "diary-9edec",
+            storageBucket: "diary-9edec.firebasestorage.app",
+            messagingSenderId: "576841545270",
+            appId: "1:576841545270:web:773645dc34805dbcea0a97",
+            measurementId: "G-WK3KR6TSRQ"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ==========================================================================
+        // 2. HTML DOM 요소 가져오기
+        // ==========================================================================
+        const diaryInput = document.getElementById('diaryInput');
+        const charCount = document.getElementById('charCount');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const voiceBtnText = document.getElementById('voiceBtnText');
+        const voiceStatus = document.getElementById('voiceStatus');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const saveBtnText = document.getElementById('saveBtnText');
+
+        const aiPlaceholder = document.getElementById('aiPlaceholder');
+        const aiLoading = document.getElementById('aiLoading');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const aiResultContent = document.getElementById('aiResultContent');
+        const resultEmoji = document.getElementById('resultEmoji');
+        const resultEmotionName = document.getElementById('resultEmotionName');
+        const resultMessage = document.getElementById('resultMessage');
+        const diaryList = document.getElementById('diaryList');
+        const toast = document.getElementById('toast');
+
+        // 현재 분석된 감정 데이터 임시 보관 변수
+        let currentAnalysisResult = null;
+
+        // 토스트 알림 표시 헬퍼 함수
+        function showToast(message) {
+            toast.textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // ==========================================================================
+        // 3. 글자 수 실시간 카운트
+        // ==========================================================================
+        diaryInput.addEventListener('input', () => {
+            charCount.textContent = `${diaryInput.value.length}자`;
+        });
+
+        // ==========================================================================
+        // 4. Web Speech API 기반 실시간 음성 인식
+        // ==========================================================================
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        let isRecording = false;
+
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ko-KR';
+            recognition.continuous = true;
+            recognition.interimResults = true;
+
+            recognition.onstart = () => {
+                isRecording = true;
+                voiceBtn.classList.add('recording');
+                voiceBtnText.textContent = '🛑 음성 입력 중지하기';
+                voiceStatus.classList.add('active');
+            };
+
+            recognition.onresult = (event) => {
+                let currentTranscript = '';
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    currentTranscript += event.results[i][0].transcript;
+                }
+
+                if (event.results[event.results.length - 1].isFinal) {
+                    const separator = diaryInput.value.length > 0 && !diaryInput.value.endsWith(' ') ? ' ' : '';
+                    diaryInput.value += separator + currentTranscript.trim();
+                    charCount.textContent = `${diaryInput.value.length}자`;
+                    diaryInput.scrollTop = diaryInput.scrollHeight;
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error('음성 인식 오류:', event.error);
+                if (event.error === 'not-allowed') {
+                    alert('마이크 사용 권한이 차단되어 있습니다. 주소창 좌측 설정에서 마이크를 허용해 주세요.');
+                }
+                stopVoiceRecognition();
+            };
+
+            recognition.onend = () => {
+                stopVoiceRecognition();
+            };
+        }
+
+        function stopVoiceRecognition() {
+            isRecording = false;
+            voiceBtn.classList.remove('recording');
+            voiceBtnText.textContent = '🎙️ 음성으로 입력하기';
+            voiceStatus.classList.remove('active');
+        }
+
+        voiceBtn.addEventListener('click', () => {
+            if (!SpeechRecognition) {
+                alert('사용 중이신 브라우저는 음성 인식을 지원하지 않습니다. Chrome 또는 Edge를 사용해 주세요.');
+                return;
+            }
+
+            if (!isRecording) {
+                try {
+                    recognition.start();
+                } catch (err) {
+                    console.error('음성 인식 시작 실패:', err);
+                }
+            } else {
+                recognition.stop();
+                stopVoiceRecognition();
+            }
+        });
+
+        // ==========================================================================
+        // 5. Vercel Serverless Function 백엔드 API 호출 (/api/analyze)
+        // ==========================================================================
+        // 브라우저는 비밀 키를 직접 가지지 않고 안전한 백엔드 엔드포인트(/api/analyze)로 요청합니다.
+        async function requestAIAnalysis(diaryText) {
+            const response = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text: diaryText })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `분석 서버 오류 (코드: ${response.status})`);
+            }
+
+            return await response.json();
+        }
+
+        // ==========================================================================
+        // 6. '분석 요청하기' 이벤트 (Vercel Serverless API 연동)
+        // ==========================================================================
+        analyzeBtn.addEventListener('click', async () => {
+            const text = diaryInput.value.trim();
+
+            if (!text) {
+                showToast('✍️ 일기 내용을 먼저 작성하거나 음성으로 말해주세요!');
+                diaryInput.focus();
+                return;
+            }
+
+            if (isRecording && recognition) {
+                recognition.stop();
+                stopVoiceRecognition();
+            }
+
+            // 1) 로딩 상태 UI 전환
+            aiPlaceholder.style.display = 'none';
+            aiResultContent.style.display = 'none';
+            aiLoading.style.display = 'flex';
+            loadingMessage.textContent = '✨ Google Gemini AI가 일기를 읽고 마음을 분석하고 있어요...';
+            analyzeBtn.disabled = true;
+            voiceBtn.disabled = true;
+
+            try {
+                // 2) Vercel 백엔드 Serverless API 호출
+                const result = await requestAIAnalysis(text);
+
+                // 분석 결과 보관
+                currentAnalysisResult = {
+                    emoji: result.emoji || '🌱',
+                    name: result.emotion || '오늘의 감정',
+                    message: result.message || '따뜻한 하루 보내세요.'
+                };
+
+                // UI에 반영
+                resultEmoji.textContent = currentAnalysisResult.emoji;
+                resultEmotionName.textContent = currentAnalysisResult.name;
+                resultMessage.textContent = currentAnalysisResult.message;
+
+                // 화면 전환
+                aiLoading.style.display = 'none';
+                aiResultContent.style.display = 'block';
+                showToast('✨ Gemini AI 분석이 완료되었습니다!');
+            } catch (error) {
+                console.error('AI 분석 요청 실패:', error);
+                
+                // Vercel 배포 전 로컬 단순 웹서버 환경이거나 환경변수 미설정 시 안내
+                currentAnalysisResult = {
+                    emoji: "🌿",
+                    name: "따뜻한 휴식과 위로",
+                    message: "오늘 하루도 참 고생 많으셨어요. 당신의 진심 어린 하루를 응원합니다. ☕\n(Vercel에 배포한 후 대시보드에서 GEMINI_API_KEY 환경변수를 설정하면 Gemini가 직접 답변합니다!)"
+                };
+
+                resultEmoji.textContent = currentAnalysisResult.emoji;
+                resultEmotionName.textContent = currentAnalysisResult.name;
+                resultMessage.textContent = currentAnalysisResult.message;
+
+                aiLoading.style.display = 'none';
+                aiResultContent.style.display = 'block';
+                showToast('ℹ️ 안내: Vercel 배포 환경에서 GEMINI_API_KEY가 연결됩니다.');
+            } finally {
+                analyzeBtn.disabled = false;
+                voiceBtn.disabled = false;
+                document.getElementById('aiResponseBox').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+
+        // ==========================================================================
+        // 7. '새로 만들기' 버튼 이벤트
+        // ==========================================================================
+        resetBtn.addEventListener('click', () => {
+            if (diaryInput.value.trim() && !confirm('작성 중인 일기를 지우고 새로 작성하시겠습니까?')) {
+                return;
+            }
+
+            diaryInput.value = '';
+            charCount.textContent = '0자';
+
+            if (isRecording && recognition) {
+                recognition.stop();
+                stopVoiceRecognition();
+            }
+
+            currentAnalysisResult = null;
+            aiResultContent.style.display = 'none';
+            aiLoading.style.display = 'none';
+            aiPlaceholder.style.display = 'flex';
+
+            showToast('🌱 새로운 일기를 작성할 준비가 되었습니다.');
+            diaryInput.focus();
+        });
+
+        // ==========================================================================
+        // 8. '일기 저장하기' (Firebase Firestore 저장)
+        // ==========================================================================
+        saveBtn.addEventListener('click', async () => {
+            const text = diaryInput.value.trim();
+
+            if (!text) {
+                showToast('⚠️ 저장할 일기 내용이 없습니다.');
+                diaryInput.focus();
+                return;
+            }
+
+            let finalAnalysis = currentAnalysisResult;
+            if (!finalAnalysis) {
+                finalAnalysis = {
+                    emoji: '🌱',
+                    name: '기록된 일기',
+                    message: '오늘 하루도 소중한 기록을 남겨주셔서 감사합니다. ✨'
+                };
+            }
+
+            saveBtn.disabled = true;
+            saveBtnText.textContent = '저장 중...';
+
+            try {
+                const now = new Date();
+                const formattedDate = now.toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    weekday: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                await db.collection('diaries').add({
+                    content: text,
+                    emotionEmoji: finalAnalysis.emoji,
+                    emotionName: finalAnalysis.name,
+                    aiMessage: finalAnalysis.message,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    formattedDate: formattedDate
+                });
+
+                showToast('🎉 일기가 Firebase 데이터베이스에 안전하게 저장되었습니다!');
+            } catch (error) {
+                console.error('Firebase 저장 실패:', error);
+                showToast('❌ 일기 저장 중 오류가 발생했습니다: ' + error.message);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtnText.textContent = '일기 저장하기';
+            }
+        });
+
+        // ==========================================================================
+        // 9. Firebase Firestore 실시간 일기 목록 구독 및 렌더링
+        // ==========================================================================
+        function subscribeDiaryList() {
+            db.collection('diaries')
+              .orderBy('createdAt', 'desc')
+              .onSnapshot((snapshot) => {
+                  if (snapshot.empty) {
+                      diaryList.innerHTML = '<div class="empty-history">아직 저장된 일기가 없습니다. 오늘의 이야기를 기록해 보세요! ✨</div>';
+                      return;
+                  }
+
+                  let html = '';
+                  snapshot.forEach((doc) => {
+                      const data = doc.data();
+                      const emoji = data.emotionEmoji || '🌱';
+                      const emotion = data.emotionName || '오늘의 일기';
+                      const date = data.formattedDate || '방금 전';
+                      const content = data.content || '';
+                      const aiMsg = data.aiMessage || '';
+
+                      html += `
+                          <div class="diary-item">
+                              <div class="diary-item-top">
+                                  <div class="diary-item-emotion">
+                                      <span>${emoji}</span>
+                                      <span>${emotion}</span>
+                                  </div>
+                                  <span class="diary-item-date">${date}</span>
+                              </div>
+                              <div class="diary-item-content">${escapeHtml(content)}</div>
+                              ${aiMsg ? `<div class="diary-item-ai">🤖 ${escapeHtml(aiMsg)}</div>` : ''}
+                          </div>
+                      `;
+                  });
+                  diaryList.innerHTML = html;
+              }, (error) => {
+                  console.error('일기 목록 가져오기 실패:', error);
+                  diaryList.innerHTML = '<div class="empty-history">일기 목록을 불러오는 중 오류가 발생했습니다.</div>';
+              });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            subscribeDiaryList();
+        });
+    </script>
+</body>
+</html>

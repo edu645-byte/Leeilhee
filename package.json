@@ -1,0 +1,19 @@
+{
+  "name": "ai-emotional-diary",
+  "version": "1.0.0",
+  "description": "Google Gemini AI 기반 감성 일기 및 Firebase Firestore 연동 웹 애플리케이션",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "ai-diary",
+    "gemini",
+    "firebase",
+    "vercel"
+  ],
+  "author": "",
+  "license": "MIT"
+}
